@@ -74,6 +74,8 @@ Replace “Example category” with a category from your spreadsheet or a saved 
 
 For periods spanning multiple calendar weeks, the budget bars share one spending total: the first fills before spending overflows into the next. Boundary weeks include only the dates you requested. The bars show how much of the period's allowance has been used; the line chart shows when spending happened.
 
+The daily chart starts its vertical scale at zero unless a day has negative net spending, such as refunds exceeding purchases.
+
 ## What happens during a review
 
 Codex reuses suitable available statements and obtains missing bank data, imports transactions without duplicating repeated imports, reads your current spreadsheet, and applies classification rules. You can explicitly ask to refresh bank data.

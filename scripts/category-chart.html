@@ -80,7 +80,9 @@
     const vals=c.days.filter(d=>d.total_local!==null).map(d=>Number(d.total_local));
     let min=Math.min(0,...vals),maxY=Math.max(0,...vals);
     if(min===maxY)maxY=min+1;
-    const pad=(maxY-min)*.12;min-=pad;maxY+=pad;
+    const pad=(maxY-min)*.12;
+    if(min<0)min-=pad;
+    if(maxY>0)maxY+=pad;
     const ticks=new Intl.NumberFormat('en-US',{maximumFractionDigits:formatter.resolvedOptions().maximumFractionDigits,notation:Math.max(Math.abs(min),Math.abs(maxY))>=1000000?'compact':'standard'});
     let widest=0;
     for(let j=0;j<=4;j++){

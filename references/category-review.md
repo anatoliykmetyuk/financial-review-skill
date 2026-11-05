@@ -29,6 +29,8 @@ If the period is overspent, cap every visible bar at capacity and show the actua
 
 Line nodes expose chronological transaction details. Header: local day/date and total local currency. Exactly one transaction per line: `HH:mm · description - formatted amount`, adapting currency. Preserve visual line breaks and show refunds with their signed spending value. Missing source time must say “time unavailable”, never invented midnight. The importer deliberately blocks date-only data until a bank-specific policy is resolved.
 
+Keep zero as the lower Y-axis bound when every daily total is nonnegative. Extend below zero only for actual negative daily totals, such as net refunds; chart padding must not introduce negative spending labels by itself.
+
 Hover tooltips disappear on leaving the node or chart even after a mouse click. Keyboard details disappear on blur and Escape. Touch tap shows details and tapping outside dismisses them. Keep the tooltip inside the visible surface with wrapping descriptions. Verify display and dismissal, narrow width, and daily/period reconciliation after renderer changes.
 
 Final response includes the table, chart reference, and concise coverage/rate notes. Do not describe an ongoing category as “on pace” merely because it is below the full-period allowance.
