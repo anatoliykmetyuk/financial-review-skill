@@ -1,0 +1,26 @@
+# All user state: configuration, rules, transactions, imports, and backups
+/data/
+
+# Local Python runtime and caches
+/.venv/
+/venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local exports, browser checks, credentials, and editor metadata
+/work/
+/outputs/
+.playwright-cli/
+.env
+.env.*
+.DS_Store
+.idea/
+.vscode/
+*.sqlite3
+*.sqlite3-*
+*.db
+*.csv
+*.zip

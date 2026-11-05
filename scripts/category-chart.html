@@ -1,0 +1,142 @@
+<div id="financial-review-chart">
+  <h3 data-title></h3>
+  <div class="text-small" data-coverage></div>
+  <div class="plot" data-plot></div>
+  <div class="tooltip" role="tooltip" hidden data-details></div>
+  <h3>Budget</h3>
+  <div data-values></div>
+  <div class="budget-weeks" data-weeks></div>
+  <div class="text-small" data-budget-note></div>
+</div>
+<style>
+#financial-review-chart {position:relative;display:grid;gap:calc(var(--font-size-base) * .75)}
+#financial-review-chart .plot {position:relative;min-width:0}
+#financial-review-chart svg {display:block;width:100%}
+#financial-review-chart .point {position:absolute;transform:translate(-50%,-50%);width:32px;height:32px;padding:0;border:0;background:transparent;color:var(--foreground)}
+#financial-review-chart .point::after {content:"";display:block;width:8px;height:8px;margin:auto;border-radius:50%;background:var(--viz-series-1)}
+#financial-review-chart [data-details] {position:absolute;pointer-events:none;max-width:100%;box-sizing:border-box;white-space:pre-wrap;overflow-wrap:anywhere;background:var(--popover);color:var(--popover-foreground);padding:calc(var(--font-size-base) * .5);z-index:2}
+#financial-review-chart [data-details][hidden] {display:none}
+#financial-review-chart .budget-weeks {display:grid;gap:calc(var(--font-size-base) * .75)}
+#financial-review-chart .budget-week {display:grid;gap:calc(var(--font-size-base) * .25)}
+#financial-review-chart .budget-track {position:relative;height:22px;background:var(--muted)}
+#financial-review-chart .budget-fill {height:100%;background:var(--viz-series-1);width:0}
+#financial-review-chart .budget-segments {position:absolute;inset:0;display:flex}
+#financial-review-chart .budget-segments span + span {box-shadow:inset 1px 0 var(--background)}
+#financial-review-chart .budget-labels {display:flex;gap:0;min-width:0}
+#financial-review-chart .budget-labels span {min-width:0;text-align:center;overflow-wrap:anywhere}
+</style>
+<script>
+(() => {
+  const data = __REPORT_JSON__;
+  const root = document.getElementById('financial-review-chart');
+  const c = data.category_report;
+  const plot = root.querySelector('[data-plot]');
+  const tooltip = root.querySelector('[data-details]');
+  const formatter = new Intl.NumberFormat('en-US',{style:'currency',currency:c.local_currency});
+  const money = x => formatter.format(Number(x));
+  const hide = () => {tooltip.hidden=true};
+  root.querySelector('[data-title]').textContent = `Daily spending · ${c.category} · ${c.local_currency}`;
+  root.querySelector('[data-coverage]').textContent = `${data.start} to ${data.end} · ${data.timezone} · ${data.coverage.complete?'Complete coverage':'Partial coverage; future or unavailable dates have no nodes'}`;
+  const max = Number(c.allowance_local),spent=Number(c.spent_local);
+  const percentage = c.percent_used === null ? 'N/A (zero budget)' : `${Number(c.percent_used).toFixed(1)}% used`;
+  const excess = Number(c.excess_local)>0 ? ` · Over budget by ${money(c.excess_local)}` : '';
+  root.querySelector('[data-values]').textContent = `${money(spent)} spent / ${money(max)} maximum · ${percentage} · ${money(c.remaining_local)} remaining${excess}`;
+  const amounts=c.segments.map(s=>Number(s.allowance_local));
+  const total=amounts.reduce((a,b)=>a+b,0);
+  const variable=amounts.some(v=>Math.abs(v-amounts[0])>1e-8);
+  const reference=Math.max(...amounts)*7;
+  c.budget_weeks.forEach(week=>{
+    const row=document.createElement('div');row.className='budget-week';row.dataset.weekStart=week.start;
+    const title=document.createElement('div');title.className='text-small';
+    title.textContent=`${week.start} to ${week.end} · ${money(week.filled_local)} / ${money(week.allowance_local)}`;
+    row.append(title);
+    const capacity=Number(week.allowance_local),filled=Number(week.filled_local);
+    const width=capacity>0 && reference>0?capacity/reference:week.segments.length/7;
+    const track=document.createElement('div');track.className='budget-track';track.dataset.track='';
+    track.style.width=`${width*100}%`;track.setAttribute('role','img');
+    track.setAttribute('aria-label',`${week.start} to ${week.end}: ${money(filled)} of ${money(capacity)} shared period spending`);
+    const fill=document.createElement('div');fill.className='budget-fill';fill.dataset.fill='';
+    fill.style.width=`${capacity>0?Math.max(0,Math.min(100,filled/capacity*100)):0}%`;
+    track.append(fill);
+    const separators=document.createElement('div');separators.className='budget-segments';separators.dataset.segments='';track.append(separators);
+    const labels=document.createElement('div');labels.className='budget-labels text-small';labels.dataset.labels='';labels.style.width=track.style.width;
+    week.segments.forEach(s=>{
+      const weight=capacity>0?Number(s.allowance_local)/capacity:1/week.segments.length;
+      const sep=document.createElement('span');sep.style.flex=`${weight} 1 0`;separators.append(sep);
+      const label=document.createElement('span');label.style.flex=`${weight} 1 0`;
+      label.textContent=new Date(`${s.date}T12:00:00Z`).toLocaleDateString('en-US',{weekday:'short',timeZone:'UTC'});
+      labels.append(label);
+    });
+    row.append(track,labels);root.querySelector('[data-weeks]').append(row);
+  });
+  root.querySelector('[data-budget-note]').textContent = (total===0 ? 'Zero-budget reference; positive spending is over budget.' : variable ? 'Section widths follow the varying daily allowances.' : `${money(amounts[0])} daily allowance; one section per day.`) + (c.budget_weeks.length>1 ? ' Shared spending fills the bars from first to last.' : '');
+  const ns='http://www.w3.org/2000/svg';
+  const add=(parent,tag,attrs,text)=>{const e=document.createElementNS(ns,tag);for(const [k,v] of Object.entries(attrs))e.setAttribute(k,v);if(text!==undefined)e.textContent=text;parent.append(e);return e};
+  function draw() {
+    hide();plot.replaceChildren();
+    const w=Math.max(280,plot.getBoundingClientRect().width),h=270,right=w-20,top=18,bottom=208;
+    let left=76;
+    const svg=add(plot,'svg',{viewBox:`0 0 ${w} ${h}`,height:h,role:'img','aria-label':`Daily spending in ${c.local_currency}; transaction details available on each day button`});
+    const vals=c.days.filter(d=>d.total_local!==null).map(d=>Number(d.total_local));
+    let min=Math.min(0,...vals),maxY=Math.max(0,...vals);
+    if(min===maxY)maxY=min+1;
+    const pad=(maxY-min)*.12;min-=pad;maxY+=pad;
+    const ticks=new Intl.NumberFormat('en-US',{maximumFractionDigits:formatter.resolvedOptions().maximumFractionDigits,notation:Math.max(Math.abs(min),Math.abs(maxY))>=1000000?'compact':'standard'});
+    let widest=0;
+    for(let j=0;j<=4;j++){
+      const label=add(svg,'text',{'font-size':12},ticks.format(min+(maxY-min)*j/4));
+      widest=Math.max(widest,label.getComputedTextLength());label.remove();
+    }
+    left=Math.max(left,widest+40);
+    const x=i=>c.days.length===1?(left+right)/2:left+(right-left)*i/(c.days.length-1);
+    const y=v=>bottom-(v-min)/(maxY-min)*(bottom-top);
+    add(svg,'rect',{x:left,y:top,width:right-left,height:bottom-top,fill:'none',stroke:'var(--border)','data-chart-frame':''});
+    const text=(x,y,t,anchor='middle',extra={})=>add(svg,'text',{x,y,'text-anchor':anchor,fill:'var(--foreground)','font-size':12,...extra},t);
+    for(let j=0;j<=4;j++){const v=min+(maxY-min)*j/4;text(left-8,y(v)+4,ticks.format(v),'end');}
+    text((left+right)/2,260,'Day / date','middle',{class:'axis-title','data-axis':'x'});
+    text(13,(top+bottom)/2,`Spent (${c.local_currency})`,'middle',{transform:`rotate(-90 13 ${(top+bottom)/2})`,class:'axis-title','data-axis':'y'});
+    const maxTicks=w<450?4:7;
+    const selected=new Set(Array.from({length:Math.min(maxTicks,c.days.length)},(_,i)=>Math.round(i*(c.days.length-1)/(Math.min(maxTicks,c.days.length)-1||1))));
+    let path='',drawing=false;
+    c.days.forEach((d,i)=>{
+      if(selected.has(i)) {
+        const anchor=i===0?'start':i===c.days.length-1?'end':'middle';
+        if(c.days.length<=7)text(x(i),224,new Date(`${d.date}T12:00:00Z`).toLocaleDateString('en-US',{weekday:'short',timeZone:'UTC'}),anchor);
+        text(x(i),c.days.length<=7?240:231,d.date.slice(5),anchor);
+      }
+      if(d.total_local===null){drawing=false;return;}
+      path+=`${drawing?'L':'M'} ${x(i)} ${y(Number(d.total_local))} `;drawing=true;
+    });
+    add(svg,'path',{d:path,fill:'none',stroke:'var(--viz-series-1)','stroke-width':2});
+    c.days.forEach((d,i)=>{
+      if(d.total_local===null)return;
+      const button=document.createElement('button');button.type='button';button.className='point cursor-interaction';button.dataset.chartHit='';button.dataset.date=d.date;
+      button.style.left=`${x(i)/w*100}%`;button.style.top=`${y(Number(d.total_local))}px`;
+      const weekday=new Date(`${d.date}T12:00:00Z`).toLocaleDateString('en-US',{weekday:'short',timeZone:'UTC'});
+      const header=`${weekday} ${d.date} · ${money(d.total_local)}${d.status==='partial'?' · partial day':''}`;
+      button.setAttribute('aria-label',header);button.setAttribute('aria-describedby','financial-review-details');tooltip.id='financial-review-details';
+      const show=()=>{
+        const tx=d.transactions.map(t=>`${t.local_time || 'time unavailable'} · ${t.description} - ${money(t.spent_local)}`);
+        tooltip.textContent=[header,...tx].join('\n');tooltip.hidden=false;
+        tooltip.style.left='0px';tooltip.style.top='0px';
+        const box=root.getBoundingClientRect(),point=button.getBoundingClientRect();
+        tooltip.style.left=`${Math.max(0,Math.min(point.left-box.left,box.width-tooltip.offsetWidth))}px`;
+        tooltip.style.top=`${Math.max(0,Math.min(point.bottom-box.top+4,box.height-tooltip.offsetHeight))}px`;
+      };
+      button.addEventListener('pointerenter',e=>{if(e.pointerType!=='touch')show()});
+      button.addEventListener('pointerleave',e=>{if(e.pointerType!=='touch')hide()});
+      button.addEventListener('pointerup',e=>{if(e.pointerType==='touch')show()});
+      button.addEventListener('focus',show);button.addEventListener('blur',hide);
+      button.addEventListener('keydown',e=>{if(e.key==='Escape')hide();else if(e.key==='Enter'||e.key===' ')show()});
+      plot.append(button);
+    });
+  }
+  plot.addEventListener('pointerleave',e=>{if(e.pointerType!=='touch')hide()});
+  root.addEventListener('pointerleave',e=>{if(e.pointerType!=='touch')hide()});
+  document.addEventListener('pointerout',e=>{if(e.pointerType!=='touch' && !e.relatedTarget)hide()});
+  window.addEventListener('blur',hide);
+  document.addEventListener('pointerdown',e=>{if(!e.target.closest('#financial-review-chart .point'))hide()});
+  document.addEventListener('keydown',e=>{if(e.key==='Escape')hide()});
+  new ResizeObserver(draw).observe(plot);
+})();
+</script>

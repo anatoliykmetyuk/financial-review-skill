@@ -1,0 +1,4 @@
+interface:
+  display_name: "Financial Review"
+  short_description: "Review bank spending using a persistent transaction ledger"
+  default_prompt: "Use $financial-review to review last week's spending against my budget."
