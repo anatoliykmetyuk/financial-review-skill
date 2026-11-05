@@ -20,7 +20,20 @@ This is only an illustration, not a required layout. The currency can be stated 
 
 ## Getting started
 
-With the skill installed in Codex, ask:
+First, ask your agent to install the skill:
+
+> Clone https://github.com/anatoliykmetyuk/financial-review-skill into my local skills directory as financial-review.
+
+Installation means cloning this repository into the directory where your agent discovers skills. For Codex, you can also run:
+
+```sh
+mkdir -p "${CODEX_HOME:-$HOME/.codex}/skills"
+git clone https://github.com/anatoliykmetyuk/financial-review-skill.git "${CODEX_HOME:-$HOME/.codex}/skills/financial-review"
+```
+
+For another agent, use its supported skills directory. If the skill is not visible immediately, start a new chat or restart your agent.
+
+Once installed, ask:
 
 > Set up financial review.
 
