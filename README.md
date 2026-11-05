@@ -78,7 +78,7 @@ The daily chart starts its vertical scale at zero unless a day has negative net 
 
 ## What happens during a review
 
-Codex reuses suitable available statements and obtains missing bank data, imports transactions without duplicating repeated imports, reads your current spreadsheet, and applies classification rules. You can explicitly ask to refresh bank data.
+Codex reuses suitable downloaded bank export files, including today's partial export, without repeating downloads or completed imports for every operation. For an ongoing day, existing ledger rows do not prove that all of that day's transactions have been imported. Codex uses suitable downloaded bank files or downloads and imports them when unavailable. Already complete historical ledger data can be reused directly. You can explicitly request a refresh or no ingestion, such as “use the ledger only”. Reports disclose the data cutoff and any limitations. Imports avoid duplicates, and Codex reads your current spreadsheet and applies classification rules.
 
 Only transactions still unclassified after automatic rules require category confirmation. Existing database classifications and rule matches are used directly, without asking you to approve them again. If none remain unclassified, Codex proceeds to the report.
 

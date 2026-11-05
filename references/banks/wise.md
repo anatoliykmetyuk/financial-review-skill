@@ -2,19 +2,19 @@
 
 Read only when checking Wise exports, acquiring missing data, or configuring Wise accounts. The common classification/report workflow remains in SKILL.md.
 
-## Reuse first
+## Reuse downloaded exports first
 
-Inspect existing transactions and local CSVs, including the user's Downloads directory for suitable CSV folders and ZIPs. Extract ZIPs into an adjacent archive-stem folder; preserve ZIPs and do not overwrite differing files. Verify headers, statement range, account IDs, and export cutoff. A current-day snapshot is reusable and partial; do not refresh merely because its cutoff predates the request time or it has no purchases on a covered day.
+Inspect existing transactions and local CSVs, including the user's Downloads directory for suitable CSV folders and ZIPs. Extract ZIPs into an adjacent archive-stem folder; preserve ZIPs and do not overwrite differing files. Verify headers, statement range, account IDs, and export cutoff. A downloaded current-day export is reusable and partial; do not repeat the download merely because its cutoff predates the request time or it has no purchases on a covered day. Apply [the shared workflow](../../SKILL.md#shared-workflow) for the ongoing-day completeness rule and user opt-outs.
 
 Use the tracked Wise accounts registered in SQLite, including their IDs, names, currencies, and source timezones. On first setup, ask which accounts to track and use their bank account IDs. Currency alone cannot distinguish multiple accounts or jars. Do not substitute removed/closed accounts or another-currency jar. Reuse configured accounts and timezones rather than asking again on every review.
 
-## Download missing coverage
+## Download missing coverage or an explicit refresh
 
 Use the configured browser through the computer-use tool, with Chrome as the initial default. Read its current instructions and inspect fresh UI state. Do not substitute another browser, undocumented endpoints, or the Wise developer API.
 
 1. Open https://wise.com/balances/statements/balance-statement/create.
 2. If login is needed, ask the user to log in to Wise in Chrome and wait. Do not attempt login or retrieve credentials. Resume afterward.
-3. Select dates covering missing review dates in the report timezone, accounting for the source timezone. A currently ongoing export ends today, never at a future month-end. Obtain adjacent dates when needed to cover local report boundaries.
+3. Select dates covering missing data, the ongoing day when suitable bank export files are unavailable, or the explicitly requested refresh, in the report timezone, accounting for the source timezone. Overlap previously imported dates when needed. A currently ongoing export ends today, never at a future month-end. Obtain adjacent dates when needed to cover local report boundaries.
 4. Select exactly the configured tracked accounts. If account identities are unclear, inspect the selection and clarify.
 5. Choose **CSV**, keep **Display transactions with fees shown separately** unchecked, and retain **Don't repeat**. Do not schedule recurring statements.
 6. Generate and verify the summary's accounts, dates, and format. Download to Downloads, verify completion, and extract if zipped.
