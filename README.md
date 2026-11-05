@@ -78,7 +78,9 @@ For periods spanning multiple calendar weeks, the budget bars share one spending
 
 Codex reuses suitable available statements and obtains missing bank data, imports transactions without duplicating repeated imports, reads your current spreadsheet, and applies classification rules. You can explicitly ask to refresh bank data.
 
-If transactions still need classification, Codex pauses before the final report and shows their local date/time, description, account amount, suggested category, and reasoning. Suggestions are saved only after you confirm them.
+Only transactions still unclassified after automatic rules require category confirmation. Existing database classifications and rule matches are used directly, without asking you to approve them again. If none remain unclassified, Codex proceeds to the report.
+
+For unresolved transactions, the skill reuses a compact table displayed inline, with separate columns for ID, Date, Description, Account, Amount, and Proposed Category. Short columns fit their contents; descriptions and proposed categories wrap instead of pushing the table horizontally. Date values use three lines: weekday, month and day, then time. Amounts use the account currency with a minus sign for outflows (such as -€100) and no minus sign for inflows (€100). The proposed category is bold, followed by a brief explanation in normal text in the same cell. Suggestions are saved only after you confirm them.
 
 You can respond with either a reusable rule or a one-off decision:
 

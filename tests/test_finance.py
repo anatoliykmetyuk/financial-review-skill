@@ -121,6 +121,19 @@ class LedgerTest(unittest.TestCase):
         self.classify()
         self.assertEqual(self.l.select('2026-11-04','2026-11-04','UTC')[0]['category'],'New')
 
+    def test_classification_requests_only_remaining_unclassified(self):
+        self.ingest([self.row('manual',description='unknown manual'),
+                     self.row('rule',description='shop'),
+                     self.row('pending',description='unknown pending')])
+        self.l.assign([1],'Category B')
+        result=self.classify()
+        self.assertEqual([r['id'] for r in result['unclassified']],[3])
+        self.assertEqual([r['category'] for r in self.l.select('2026-11-01','2026-11-05','UTC')],
+                         ['Category B','Category A',None])
+        self.l.assign([3],'Category A')
+        self.assertEqual(self.classify()['unclassified'],[])
+        self.assertEqual(self.classify()['unclassified'],[])
+
     def test_unknown_gates_category_report_and_credit_kind(self):
         self.ingest([self.row(),self.row('b',description='unknown merchant',timestamp='2026-11-03T12:00:00Z')])
         self.classify()

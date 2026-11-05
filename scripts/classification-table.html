@@ -1,0 +1,22 @@
+<style>
+#classification-request { width:100%; min-width:0; }
+#classification-request table { display:grid; width:100%; grid-template-columns:max-content max-content minmax(0,1fr) max-content max-content minmax(0,1.6fr); column-gap:10px; border-collapse:collapse; }
+#classification-request thead, #classification-request tbody, #classification-request tr { display:contents; }
+#classification-request th, #classification-request td { min-width:0; padding:8px 0; overflow-wrap:anywhere; text-align:left; border-bottom:1px solid var(--border); }
+#classification-request th { font-weight:500; }
+#classification-request td:nth-child(1), #classification-request td:nth-child(2), #classification-request td:nth-child(5) { white-space:nowrap; font-variant-numeric:tabular-nums; }
+#classification-request th:nth-child(5), #classification-request td:nth-child(5) { text-align:right; }
+#classification-request strong { font-weight:500; }
+#classification-request .reason { display:block; margin-top:calc(var(--font-size-base) * .25); }
+#classification-request .context { margin-bottom:calc(var(--font-size-base) * .5); }
+@media (max-width:480px) {
+  #classification-request table { grid-template-columns:max-content max-content minmax(0,1fr) minmax(0,.65fr) max-content minmax(0,1.6fr); column-gap:6px; }
+}
+</style>
+<div id="classification-request">
+  <p class="context text-small text-muted">__TABLE_CONTEXT__</p>
+  <table class="table table-sm" aria-label="Unclassified transactions with proposed categories and justifications">
+    <thead><tr><th scope="col">ID</th><th scope="col">Date</th><th scope="col">Description</th><th scope="col">Account</th><th scope="col" class="text-end">Amount</th><th scope="col">Proposed Category</th></tr></thead>
+    <tbody>__TABLE_ROWS__</tbody>
+  </table>
+</div>
