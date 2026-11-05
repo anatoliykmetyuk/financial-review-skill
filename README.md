@@ -22,16 +22,16 @@ This is only an illustration, not a required layout. The currency can be stated 
 
 First, ask your agent to install the skill:
 
-> Clone https://github.com/anatoliykmetyuk/financial-review-skill into my local skills directory as financial-review.
+> Clone https://github.com/anatoliykmetyuk/financial-review-skill into my user-level skills directory as financial-review, so it is available across projects. For Codex, use `${CODEX_HOME:-$HOME/.codex}/skills/financial-review`.
 
-Installation means cloning this repository into the directory where your agent discovers skills. For Codex, you can also run:
+Installation means cloning this repository into your agent's user-level skills directory, outside any individual project. For Codex, you can also run:
 
 ```sh
 mkdir -p "${CODEX_HOME:-$HOME/.codex}/skills"
 git clone https://github.com/anatoliykmetyuk/financial-review-skill.git "${CODEX_HOME:-$HOME/.codex}/skills/financial-review"
 ```
 
-For another agent, use its supported skills directory. If the skill is not visible immediately, start a new chat or restart your agent.
+For another agent, use its supported user-level skills directory. If the skill is not visible immediately, start a new chat or restart your agent.
 
 Once installed, ask:
 
