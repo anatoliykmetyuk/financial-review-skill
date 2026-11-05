@@ -96,3 +96,5 @@ On access and before the first write, automatically retain only today and the pr
 ## Development checks
 
 Run `.venv/bin/python -m unittest discover -s tests -v`. Git ignores the entire local `data/` directory, runtime, caches, and generated outputs. Repository-specific maintenance and privacy requirements are in `AGENTS.md`.
+
+For tooltip changes, open a generated category chart with the visualization wrapper in a Playwright CLI session and run `run-code --filename /absolute/skill/tests/tooltip_browser_checks.js`. This exercises hover recovery after focus loss, clicks, Escape, leaving points, responsive column alignment, and touch dismissal. Use synthetic transaction data for reusable fixtures.

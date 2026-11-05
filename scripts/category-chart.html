@@ -14,8 +14,11 @@
 #financial-review-chart svg {display:block;width:100%}
 #financial-review-chart .point {position:absolute;transform:translate(-50%,-50%);width:32px;height:32px;padding:0;border:0;background:transparent;color:var(--foreground)}
 #financial-review-chart .point::after {content:"";display:block;width:8px;height:8px;margin:auto;border-radius:50%;background:var(--viz-series-1)}
-#financial-review-chart [data-details] {position:absolute;pointer-events:none;max-width:100%;box-sizing:border-box;white-space:pre-wrap;overflow-wrap:anywhere;background:var(--popover);color:var(--popover-foreground);padding:calc(var(--font-size-base) * .5);z-index:2}
+#financial-review-chart [data-details] {position:absolute;pointer-events:none;max-width:100%;box-sizing:border-box;white-space:pre-wrap;overflow-wrap:anywhere;text-align:left;background:var(--popover);color:var(--popover-foreground);padding:calc(var(--font-size-base) * .5);z-index:2}
 #financial-review-chart [data-details][hidden] {display:none}
+#financial-review-chart .detail-transactions {display:grid;grid-template-columns:max-content max-content minmax(0,1fr);column-gap:calc(var(--font-size-base) * .75)}
+#financial-review-chart .detail-time, #financial-review-chart .detail-amount {white-space:nowrap;font-variant-numeric:tabular-nums}
+#financial-review-chart .detail-description {min-width:0;overflow-wrap:anywhere}
 #financial-review-chart .budget-weeks {display:grid;gap:calc(var(--font-size-base) * .75)}
 #financial-review-chart .budget-week {display:grid;gap:calc(var(--font-size-base) * .25)}
 #financial-review-chart .budget-track {position:relative;height:22px;background:var(--muted)}
@@ -34,7 +37,8 @@
   const tooltip = root.querySelector('[data-details]');
   const formatter = new Intl.NumberFormat('en-US',{style:'currency',currency:c.local_currency});
   const money = x => formatter.format(Number(x));
-  const hide = () => {tooltip.hidden=true};
+  let activePoint=null;
+  const hide = () => {tooltip.hidden=true;activePoint=null};
   root.querySelector('[data-title]').textContent = `Daily spending · ${c.category} · ${c.local_currency}`;
   root.querySelector('[data-coverage]').textContent = `${data.start} to ${data.end} · ${data.timezone} · ${data.coverage.complete?'Complete coverage':'Partial coverage; future or unavailable dates have no nodes'}`;
   const max = Number(c.allowance_local),spent=Number(c.spent_local);
@@ -118,16 +122,26 @@
       const header=`${weekday} ${d.date} · ${money(d.total_local)}${d.status==='partial'?' · partial day':''}`;
       button.setAttribute('aria-label',header);button.setAttribute('aria-describedby','financial-review-details');tooltip.id='financial-review-details';
       const show=()=>{
-        const tx=d.transactions.map(t=>`${t.local_time || 'time unavailable'} · ${t.description} - ${money(t.spent_local)}`);
-        tooltip.textContent=[header,...tx].join('\n');tooltip.hidden=false;
+        if(activePoint===button && !tooltip.hidden)return;
+        activePoint=button;
+        const heading=document.createElement('div');heading.textContent=header;
+        const transactions=document.createElement('div');transactions.className='detail-transactions';
+        d.transactions.forEach(t=>{
+          for(const [name,value] of [['time',t.local_time || 'time unavailable'],['amount',money(t.spent_local)],['description',t.description]]){
+            const cell=document.createElement('span');cell.className=`detail-${name}`;cell.textContent=value;transactions.append(cell);
+          }
+        });
+        tooltip.replaceChildren(heading,transactions);tooltip.hidden=false;
         tooltip.style.left='0px';tooltip.style.top='0px';
         const box=root.getBoundingClientRect(),point=button.getBoundingClientRect();
         tooltip.style.left=`${Math.max(0,Math.min(point.left-box.left,box.width-tooltip.offsetWidth))}px`;
         tooltip.style.top=`${Math.max(0,Math.min(point.bottom-box.top+4,box.height-tooltip.offsetHeight))}px`;
       };
       button.addEventListener('pointerenter',e=>{if(e.pointerType!=='touch')show()});
+      // Focus changes in an embedded view can hide details without another enter event.
+      button.addEventListener('pointermove',e=>{if(e.pointerType!=='touch')show()});
       button.addEventListener('pointerleave',e=>{if(e.pointerType!=='touch')hide()});
-      button.addEventListener('pointerup',e=>{if(e.pointerType==='touch')show()});
+      button.addEventListener('pointerup',show);
       button.addEventListener('focus',show);button.addEventListener('blur',hide);
       button.addEventListener('keydown',e=>{if(e.key==='Escape')hide();else if(e.key==='Enter'||e.key===' ')show()});
       plot.append(button);

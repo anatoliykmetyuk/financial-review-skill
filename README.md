@@ -74,7 +74,7 @@ Replace “Example category” with a category from your spreadsheet or a saved 
 
 For periods spanning multiple calendar weeks, the budget bars share one spending total: the first fills before spending overflows into the next. Boundary weeks include only the dates you requested. The bars show how much of the period's allowance has been used; the line chart shows when spending happened.
 
-The daily chart starts its vertical scale at zero unless a day has negative net spending, such as refunds exceeding purchases.
+The daily chart starts its vertical scale at zero unless a day has negative net spending, such as refunds exceeding purchases. Its tooltips show time, amount, then description in three columns with matching left edges across transactions. Hovering or clicking a point shows its details; moving within a point restores details after a focus change hides them.
 
 ## What happens during a review
 
