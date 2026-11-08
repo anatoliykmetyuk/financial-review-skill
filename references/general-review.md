@@ -8,4 +8,4 @@ Use the configured base currency and the [budget checks](budgets-and-currency.md
 - 🔴 for an excess above that threshold.
 - 🟢 for a short all-clear when all categories are within their limits, classifications and budget mappings are resolved, and coverage is verified through the stated cutoff.
 
-Keep the default output to the exception lines or the all-clear, with concise dates, timezone, coverage, and rate notes. If coverage is unverified and the available ledger shows no overages, state that without a green marker. A positive spend against a zero limit follows the same warning thresholds.
+End the exception list with a single total over budget. Sum the unrounded excesses from the listed categories and months. Keep the report concise with dates, timezone, coverage, and rate notes. If coverage is unverified and the available ledger shows no overages, state that without a green marker. A positive spend against a zero limit follows the same warning thresholds.

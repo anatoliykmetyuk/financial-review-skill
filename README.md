@@ -60,7 +60,7 @@ You need access to the spreadsheet through the connected Google Drive integratio
 
 > Financial review from January 10 through January 20, 2035.
 
-A request without a category reports only over-budget categories in your base currency. Overspending is marked 🟡 or 🔴 according to your configured threshold. The report shows 🟢 when all categories are within budget and coverage is verified.
+A request without a category reports only over-budget categories and their combined overage in your base currency. Overspending is marked 🟡 or 🔴 according to your configured threshold. The report shows 🟢 when all categories are within budget and coverage is verified.
 
 If you omit the period, your saved default applies. “This week” means Monday through Sunday. Budget checks use month-to-date spending through the available cutoff. Categories default to the full monthly limit. Configured ongoing categories use the cumulative allowance from the first of the month through the review week's Sunday, capped at month-end. Weeks can offset one another within the same month.
 

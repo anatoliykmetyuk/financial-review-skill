@@ -67,6 +67,8 @@ def render(data,chart_path=None):
                     lines.append(budget_check_line(r, base))
                 else:
                     lines.append(f"{'🔴' if r['status']=='red' else '🟡'} {r['category']}: {money(r['spent_base'],base)} spent / {money(r['allowance_base'],base)} allowance; {money(r['excess_base'],base)} over.")
+            total_excess = sum(Decimal(r['excess_base']) for r in warnings)
+            lines.extend(['', f"**Total over budget · {money(total_excess, base)}**"])
     else:
         c=data['category_report'];cur=c['local_currency']
         checks = [r for r in data.get('budget_checks', []) if r['category'] == c['category']]

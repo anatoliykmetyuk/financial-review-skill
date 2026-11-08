@@ -43,12 +43,21 @@ class RenderTest(unittest.TestCase):
         with self.assertRaises(ReviewError): render({'status':'needs-classification'})
 
     def test_general_base_warnings_and_all_clear(self):
-        data=fixture();data['mode']='general';data['categories']=[{'category':'Category A','status':'yellow','spent_base':'80','allowance_base':'70','excess_base':'10'}]
+        data=fixture();data['mode']='general'
+        data['categories']=[
+            {'category':'Category A','status':'yellow','spent_base':'80.004','allowance_base':'70','excess_base':'10.004'},
+            {'category':'Category B','status':'red','spent_base':'100.004','allowance_base':'70','excess_base':'30.004'},
+            {'category':'Category C','status':'green','spent_base':'30','allowance_base':'70','excess_base':'0'},
+        ]
         text=render(data)
         self.assertIn('🟡 Category A: $80.00 spent / $70.00 allowance; $10.00 over.',text)
+        self.assertIn('**Total over budget · $40.01**',text)
+        self.assertNotIn('Category C',text)
         self.assertNotIn('visualize',text)
-        data['categories'][0]['status']='green'
-        self.assertIn('🟢 All categories',render(data))
+        data['categories']=data['categories'][2:]
+        text=render(data)
+        self.assertIn('🟢 All categories',text)
+        self.assertNotIn('Total over budget',text)
 
     def segments(self,start,count,amount='1000'):
         first=date.fromisoformat(start)
