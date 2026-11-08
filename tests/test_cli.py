@@ -16,9 +16,10 @@ class CliTest(unittest.TestCase):
           assert r.returncode==0,r.stderr
           return json.loads(r.stdout)
          cli('init')
-         cli('configure',write_settings(root/'data'))
+         config=settings();config['ongoing_categories']=['Category A']
+         cli('configure',write_settings(root/'data',config))
          cli('account','--bank','test','--source-id','1','--name','Fixture','--currency','USD','--source-timezone','UTC')
-         (root/'statement.csv').write_text('timestamp,amount,currency,description,kind,bank_transaction_id\n2026-11-02T12:00:00Z,-50,USD,Fixture shop,expense,1\n')
+         (root/'statement.csv').write_text('timestamp,amount,currency,description,kind,bank_transaction_id\n2026-11-02T12:00:00Z,-100,USD,Fixture shop,expense,1\n')
          cli('ingest',root/'statement.csv','--adapter','normalized','--account','test:1')
          dates=['--start','2026-11-02','--end','2026-11-03','--timezone','UTC']
          assert len(cli('classify',*dates)['unclassified'])==1
@@ -35,7 +36,11 @@ class CliTest(unittest.TestCase):
           render=[python,str(runtime/'scripts/render_report.py'),str(root/'report.json')]
           if mode=='category':render+=['--chart',str(root/'chart.html')]
           r=subprocess.run(render,capture_output=True,text=True);assert r.returncode==0,r.stderr
-          assert ('🔴' in r.stdout) if mode=='general' else ('GBP' in r.stdout and 'visualize' in r.stdout)
+          if mode=='general':
+           self.assertIn('🔴 **Category A** · $100.00 spent month to date / $80.00 cumulative allowance through 2026-11-08',r.stdout)
+          else:
+           self.assertIn('GBP',r.stdout)
+           self.assertIn('visualize',r.stdout)
 
     def test_bootstrap_from_empty_directory_and_preserve_existing_data(self):
         import sqlite3,yaml

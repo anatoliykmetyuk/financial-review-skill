@@ -170,13 +170,41 @@ class LedgerTest(unittest.TestCase):
         self.assertEqual(self.report('Category A')['category_report']['status'],'red')
 
     def test_cross_month_budget_and_missing_month(self):
+        config = settings()
+        config['ongoing_categories'] = ['Category A']
+        write_settings(self.l.data, config)
         self.ingest([self.row(timestamp='2026-10-31T12:00:00Z')],start='2026-10-01T00:00:00Z',end='2026-11-06T00:00:00Z')
         self.classify('2026-10-31','2026-11-02')
         self.budget['categories']['Category A']['2026-10']='620'
-        c=self.report('Category A',start='2026-10-31',end='2026-11-02')['category_report']
+        result = self.report('Category A',start='2026-10-31',end='2026-11-02')
+        c = result['category_report']
         self.assertEqual(c['allowance_base'],Decimal(40))
+        checks = [r for r in result['budget_checks'] if r['category'] == 'Category A']
+        self.assertEqual([(r['allowance_end'], r['spent_base'], r['allowance_base']) for r in checks],
+                         [('2026-10-31', Decimal(10), Decimal(620)), ('2026-11-08', Decimal(0), Decimal(80))])
         del self.budget['categories']['Category A']['2026-10']
         self.assertEqual(self.report(start='2026-10-31',end='2026-11-02')['status'],'budget-mapping-required')
+
+    def test_budget_checks_pool_weeks_and_use_full_monthly_limit(self):
+        config = settings()
+        config['ongoing_categories'] = ['Category A']
+        write_settings(self.l.data, config)
+        self.ingest([
+            self.row('first', '2026-11-01T12:00:00Z', '-15'),
+            self.row('second', '2026-11-02T12:00:00Z', '-65'),
+            self.row('monthly-first', '2026-11-01T13:00:00Z', '-20', 'coffee'),
+            self.row('monthly-second', '2026-11-03T12:00:00Z', '-5', 'coffee'),
+            self.row('after-cutoff', '2026-11-05T13:00:00Z', '-500'),
+        ])
+        self.classify()
+        result = self.report()
+        checks = {r['category']: r for r in result['budget_checks']}
+        for name, spent, limit in [('Category A', 80, 80), ('Category B', 25, 30)]:
+            self.assertEqual(checks[name]['spent_base'], Decimal(spent))
+            self.assertEqual(checks[name]['allowance_base'], Decimal(limit))
+        self.assertTrue(result['all_within_budget'])
+        activity = {r['category']: r['spent_base'] for r in result['categories']}
+        self.assertEqual(activity, {'Category A': Decimal(65), 'Category B': Decimal(5)})
 
     def test_report_cutoff_is_ephemeral(self):
         self.ingest([self.row()]);self.classify()

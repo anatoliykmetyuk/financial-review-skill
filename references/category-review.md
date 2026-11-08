@@ -4,7 +4,7 @@ Complete the shared workflow first. Run `report --category 'Example category'`, 
 
 Run `scripts/render_report.py REPORT.json --chart /absolute/current-chat/work/financial-review.html` for the table and chart fragment. Follow the visualization skill when presenting or changing a visual. Use the current chat's durable working directory; never reuse another chat's absolute chart path.
 
-State category, dates, timezone, and cutoff. Preserve these weekly labels, substituting configured currency codes and appropriately formatted amounts:
+State category, dates, timezone, and cutoff. Include the category's [budget checks](budgets-and-currency.md#budget-checks). The table and charts describe the requested dates. Preserve these weekly labels, substituting configured currency codes and appropriately formatted amounts:
 
 | | BASE | LOCAL |
 |---|---:|---:|

@@ -32,10 +32,12 @@ budget:
   sheet: Example sheet
 category_aliases:
   shortcut: Example category
+ongoing_categories:
+  - Example category
 banks: {}
 ```
 
-The configured period is one of `this_week`, `this_month`, `last_week`, or `last_month`. The warning threshold is in the base currency. Empty alias maps and bank maps are valid; account details live in the accounts table. Individual review arguments can override saved timezone/currency choices.
+The configured period is one of `this_week`, `this_month`, `last_week`, or `last_month`. The warning threshold is in the base currency. Empty alias maps and bank maps are valid; account details live in the accounts table. `ongoing_categories` contains exact spreadsheet category names and defaults to an empty list when omitted. Individual review arguments can override saved timezone/currency choices.
 
 There is no saved spreadsheet layout. On each review the skill discovers category/month budgets from the current sheet through the connected spreadsheet tools. See [budgets and currency](budgets-and-currency.md).
 
@@ -75,7 +77,7 @@ The following are abstract examples; values must come from the completed local s
 
 `assign` saves a manual classification; `clear` permits rules to apply again. Keyword updates trim the phrase, remove case-insensitive duplicates across categories, and reclassify only the supplied period. Longest literal keyword wins, with stable rule order for ties. Category shortcuts come only from local `category_aliases`.
 
-`report --category 'Example category'` produces a category review; without category it produces a general review. Optional `--cutoff ISO_INSTANT` is temporary context for that output, never stored. Without a cutoff, observed days are partial and other dates unavailable. A blank date does not prove zero spending. `--as-of` is for explicit historical-rate runs and reproducible tests; normal reviews fetch current rates.
+`report --category 'Example category'` produces a category review; without category it produces a general review. The report includes `budget_checks` for category and month, and `categories` for the requested dates. Optional `--cutoff ISO_INSTANT` caps spending at a verified cutoff for that output. Without a cutoff, observed days are partial and other dates unavailable. A blank date does not prove zero spending. `--as-of` is for explicit historical-rate runs and reproducible tests; normal reviews fetch current rates.
 
 ## Bank adapters
 

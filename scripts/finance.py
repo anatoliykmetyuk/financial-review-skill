@@ -509,6 +509,42 @@ def rate_table(snapshot, needed, base):
     return rates
 
 
+def budget_balance(spent, allowance, threshold):
+    excess = spent - allowance
+    return {
+        "spent_base": spent, "allowance_base": allowance, "remaining_base": -excess,
+        "excess_base": max(excess, Decimal(0)),
+        "status": "red" if excess > threshold else "yellow" if excess > 0 else "green",
+    }
+
+
+def check_budgets(last, today, available, months, totals, ongoing, threshold):
+    checks = []
+    for month in months:
+        start = date.fromisoformat(f"{month}-01")
+        if start > today:
+            continue
+        days = calendar.monthrange(start.year, start.month)[1]
+        month_end = start.replace(day=days)
+        review_end = min(last, month_end)
+        anchor = min(review_end, today)
+        sunday = anchor + timedelta(days=6 - anchor.weekday())
+        for category, amounts in sorted(available.items()):
+            if month not in amounts:
+                continue
+            cumulative = category in ongoing
+            allowance_end = min(sunday, month_end) if cumulative else month_end
+            monthly = number(amounts[month])
+            allowance = monthly * allowance_end.day / days if cumulative else monthly
+            spent = totals.get((month, category), Decimal(0))
+            checks.append({
+                "category": category, "cadence": "ongoing" if cumulative else "monthly",
+                "month": month, "allowance_end": allowance_end.isoformat(),
+                **budget_balance(spent, allowance, threshold),
+            })
+    return checks
+
+
 def report(ledger, start, end, zone, budget, fx, category=None, local_currency=None, as_of=None, cutoff=None):
     config=ledger.settings()
     zone=zone or config['defaults']['timezone']
@@ -517,7 +553,11 @@ def report(ledger, start, end, zone, budget, fx, category=None, local_currency=N
     threshold=number(config['defaults']['yellow_excess_max'])
     category=config['category_aliases'].get(category,category)
     a,b,_,_ = period(start,end,zone)
-    rows = ledger.select(start,end,zone)
+    review_time = parse_instant(as_of) if as_of else datetime.now(UTC)
+    current_local = review_time.astimezone(ZoneInfo(zone)).date()
+    data_end = min(parse_instant(cutoff), review_time) if cutoff else review_time
+    rows = [r for r in ledger.select(a.replace(day=1).isoformat(),end,zone)
+            if r["timestamp_us"] <= epoch_us(data_end)]
     unknown = [r for r in rows if r["category"] is None]
     ambiguous_credit = [r for r in rows if r["kind"]=="credit-review"]
     if unknown or ambiguous_credit:
@@ -527,7 +567,6 @@ def report(ledger, start, end, zone, budget, fx, category=None, local_currency=N
     if category:
         needed.add(currency(local_currency))
     rates = rate_table(fx,needed,base)
-    review_time = parse_instant(as_of) if as_of else datetime.now(UTC)
     age = review_time - parse_instant(fx["retrieved_at"])
     if age < timedelta(minutes=-5) or age > timedelta(hours=24):
         raise ReviewError("Fetch current Wise rates for this review; supplied snapshot is stale or future-dated")
@@ -538,6 +577,7 @@ def report(ledger, start, end, zone, budget, fx, category=None, local_currency=N
     if category and category not in available:
         issues.append({"category":category,"problem":"Requested category has no verified spreadsheet row"})
     totals = {}
+    monthly_totals = {}
     for r in rows:
         if r["kind"] in {"internal","income"}:
             continue
@@ -545,13 +585,18 @@ def report(ledger, start, end, zone, budget, fx, category=None, local_currency=N
         if r["kind"]=="expense" and number(r["amount"])>0 or r["kind"]=="refund" and number(r["amount"])<0:
             raise ReviewError(f"Transaction kind/sign conflict: {r['id']}")
         r["spent_base"] = cost
-        totals[r["category"]] = totals.get(r["category"],Decimal(0))+cost
+        c = r["category"]
+        key = (r["local_date"][:7], c)
+        monthly_totals[key] = monthly_totals.get(key, Decimal(0)) + cost
+        if r["local_date"] >= a.isoformat():
+            totals[c] = totals.get(c, Decimal(0)) + cost
     for issue in issues:
         c = issue["category"]
-        issue["spent_base"] = totals.get(c,Decimal(0))
+        issue["spent_base"] = sum((spent for (_, name), spent in monthly_totals.items() if name == c), Decimal(0))
         issue["transactions"] = [r for r in rows if r["category"]==c]
     results = []
     days = [a+timedelta(days=i) for i in range((b-a).days+1)]
+    months = dict.fromkeys(d.strftime('%Y-%m') for d in days)
     for c in sorted(set(available)|set(totals)|({category} if category else set())):
         if c not in available:
             continue
@@ -564,15 +609,18 @@ def report(ledger, start, end, zone, budget, fx, category=None, local_currency=N
             allowances.append(number(available[c][m])/calendar.monthrange(day.year,day.month)[1])
         else:
             allowance,spent = sum(allowances,Decimal(0)),totals.get(c,Decimal(0))
-            over = spent-allowance
-            results.append({"category":c,"spent_base":spent,"allowance_base":allowance,"remaining_base":-over,
-                            "excess_base":max(over,Decimal(0)),"status":"red" if over>threshold else "yellow" if over>0 else "green",
-                            "daily_allowances_base":allowances,"monthly_base":{m:available[c][m] for m in dict.fromkeys(d.strftime('%Y-%m') for d in days)}})
-    current_local = review_time.astimezone(ZoneInfo(zone)).date()
+            results.append({"category":c,**budget_balance(spent, allowance, threshold),
+                            "daily_allowances_base":allowances,"monthly_base":{m:available[c][m] for m in months}})
+    budget_checks = check_budgets(b, current_local, available, months, monthly_totals,
+                                  config.get("ongoing_categories", []), threshold)
+    latest = rows[-1]["local_datetime"] if rows else None
     is_current_week = (b-a).days == 6 and a.weekday() == 0 and a <= current_local <= b
     result = {"base_currency":base,"mode":"category" if category else "general","start":start,"end":end,"timezone":zone,"is_current_week":is_current_week,
               "coverage":coverage,"rate_snapshot":fx,"issues":issues,"categories":results,
-              "all_within_budget":not issues and coverage["usable_for_review"] and all(r["status"]=="green" for r in results),
+              "budget_checks":budget_checks,"latest_transaction":latest,
+              "all_within_budget":not issues and coverage["usable_for_review"]
+              and any(d["status"] != "missing" for d in coverage["days"])
+              and all(r["status"]=="green" for r in budget_checks),
               "status":"budget-mapping-required" if issues else "ready"}
     if category:
         target = next((r for r in results if r["category"]==category),None)
@@ -583,7 +631,7 @@ def report(ledger, start, end, zone, budget, fx, category=None, local_currency=N
             target[key+"_local"] = target[key+"_base"]/rates[local_currency]
         target["percent_used"] = target["spent_base"]/target["allowance_base"]*100 if target["allowance_base"] else None
         target["segments"] = [{"date":d.isoformat(),"allowance_local":allow/rates[local_currency]} for d,allow in zip(days,target["daily_allowances_base"])]
-        included = [r for r in rows if r["category"]==category and "spent_base" in r]
+        included = [r for r in rows if r["local_date"] >= a.isoformat() and r["category"]==category and "spent_base" in r]
         chart = []
         for cov in coverage["days"]:
             transactions = [r for r in included if r["local_date"]==cov["date"]]
@@ -601,7 +649,7 @@ def empty_settings():
     return {'version':2,
             'defaults':{'timezone':None,'browser':'chrome','period':None,'base_currency':None,'local_currency':None,'yellow_excess_max':None},
             'budget':{'spreadsheet_id':None,'sheet':None},
-            'category_aliases':{},'banks':{}}
+            'category_aliases':{},'ongoing_categories':[],'banks':{}}
 
 
 def missing_settings(config):
@@ -620,6 +668,9 @@ def missing_settings(config):
     for key in ('spreadsheet_id','sheet'):
         if not budget.get(key):missing.append('budget.'+key)
     if not isinstance(config.get('category_aliases'),dict):missing.append('category_aliases')
+    ongoing = config.get("ongoing_categories", [])
+    if not isinstance(ongoing, list) or any(not isinstance(c, str) or not c.strip() for c in ongoing):
+        raise ReviewError("ongoing_categories must be a list of spreadsheet category names")
     if not isinstance(config.get('banks'),dict):missing.append('banks')
     return missing
 

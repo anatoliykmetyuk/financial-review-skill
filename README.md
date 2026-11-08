@@ -46,7 +46,7 @@ You will choose or confirm:
 - Your reporting timezone and default review period.
 - Your base currency, matching the budget spreadsheet, and an optional second display currency.
 - The amount of overspending that separates yellow from red warnings.
-- Any category shortcuts you want to use in requests.
+- Any category shortcuts and categories you want to track with an ongoing allowance.
 
 You need access to the spreadsheet through the connected Google Drive integration and access to your bank statements. Wise acquisition and CSV import are supported; another bank requires a compatible adapter before its exports can be imported. Bank access uses Chrome by default. If login is needed, Codex asks you to log in yourself.
 
@@ -60,9 +60,9 @@ You need access to the spreadsheet through the connected Google Drive integratio
 
 > Financial review from January 10 through January 20, 2035.
 
-A request without a category reviews spending across categories. You get a concise report in your base currency, without charts. Overspending is marked 🟡 or 🔴 according to your configured threshold. When spending is within budget and there are no unresolved data or budget problems, the report shows 🟢.
+A request without a category reports only over-budget categories in your base currency. Overspending is marked 🟡 or 🔴 according to your configured threshold. The report shows 🟢 when all categories are within budget and coverage is verified.
 
-If you omit the period, your saved default applies. “This week” means Monday through Sunday. An ongoing week or month is valid: future days are not treated as zero spending. The comparison uses the allowance for the full requested period, and the report states the available data cutoff.
+If you omit the period, your saved default applies. “This week” means Monday through Sunday. Budget checks use month-to-date spending through the available cutoff. Categories default to the full monthly limit. Configured ongoing categories use the cumulative allowance from the first of the month through the review week's Sunday, capped at month-end. Weeks can offset one another within the same month.
 
 ### Category review
 

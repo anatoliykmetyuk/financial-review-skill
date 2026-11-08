@@ -2,7 +2,7 @@
 """Format report JSON as Markdown; optionally create a category chart fragment."""
 import argparse
 import json
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 
@@ -35,19 +35,44 @@ def budget_weeks(segments, spent):
     return weeks
 
 
+def budget_check_line(check, base):
+    status = check['status']
+    marker = {'red': '🔴 ', 'yellow': '🟡 ', 'green': ''}[status]
+    if check['cadence'] == 'ongoing':
+        limit = f"cumulative allowance through {check['allowance_end']}"
+    else:
+        limit = f"{check['month']} monthly limit"
+    spent = money(check['spent_base'], base)
+    allowance = money(check['allowance_base'], base)
+    balance = (f"{money(check['excess_base'], base)} over" if status != 'green'
+               else f"{money(check['remaining_base'], base)} left")
+    return f"- {marker}**{check['category']}** · {spent} spent month to date / {allowance} {limit} · **{balance}**"
+
+
 def render(data,chart_path=None):
     if data['status']!='ready':
         raise ReviewError(f"Report is not ready: {data['status']}. Resolve listed issues before reporting.")
     base=data['base_currency']
     lines=[f"{data['start']} to {data['end']} · {data['timezone']}"]
     if data['mode']=='general':
-        warnings=[r for r in data['categories'] if r['status']!='green']
+        warnings=[r for r in data.get('budget_checks', data['categories']) if r['status']!='green']
         if not warnings and data['all_within_budget']:
-            lines.append('🟢 All categories within budget for the requested period allowance.')
-        for r in warnings:
-            lines.append(f"{'🔴' if r['status']=='red' else '🟡'} {r['category']}: {money(r['spent_base'],base)} spent / {money(r['allowance_base'],base)} allowance; {money(r['excess_base'],base)} over.")
+            lines.extend(['', '🟢 All categories within budget.'])
+        elif not warnings:
+            lines.extend(['', 'No over-budget categories in the available ledger.'])
+        else:
+            lines.append('')
+            for r in sorted(warnings, key=lambda r: -Decimal(r['excess_base'])):
+                if 'cadence' in r:
+                    lines.append(budget_check_line(r, base))
+                else:
+                    lines.append(f"{'🔴' if r['status']=='red' else '🟡'} {r['category']}: {money(r['spent_base'],base)} spent / {money(r['allowance_base'],base)} allowance; {money(r['excess_base'],base)} over.")
     else:
         c=data['category_report'];cur=c['local_currency']
+        checks = [r for r in data.get('budget_checks', []) if r['category'] == c['category']]
+        if checks:
+            lines.append('')
+            lines.extend(budget_check_line(r, base) for r in checks)
         # Rates are base-currency units per one foreign-currency unit.
         factor=Decimal(1) if cur==base else Decimal(1)/Decimal(str(data['rate_snapshot']['rates'][cur]['base_per_unit']))
         weekly=len(c['segments'])==7
@@ -74,10 +99,17 @@ def render(data,chart_path=None):
         path=Path(chart_path).resolve();path.parent.mkdir(parents=True,exist_ok=True)
         path.write_text(template.replace('__REPORT_JSON__',payload))
         lines.extend(['',f'visualize{{"path":"{path}"}}'])
-    if not data['coverage']['complete']:
+    if 'latest_transaction' in data and not data['coverage']['usable_for_review']:
+        latest = data['latest_transaction']
+        recorded = datetime.fromisoformat(latest).isoformat(sep=' ', timespec='minutes') if latest else 'unavailable'
+        lines.extend(['', f"Ledger only. Latest recorded transaction · {recorded}. Coverage is unverified."])
+    elif 'latest_transaction' in data or not data['coverage']['complete']:
         observed=[d for d in data['coverage']['days'] if d['cutoff']]
         cutoff=observed[-1]['cutoff'] if observed else 'unavailable'
-        lines.extend(['',f'Data cutoff: {cutoff}. Partial days are incomplete; future days have no data.'])
+        note = f"Data cutoff · {cutoff}."
+        if not data['coverage']['complete']:
+            note += " Coverage is partial."
+        lines.extend(['', note])
     lines.extend(['',f"Wise rates retrieved: {data['rate_snapshot']['retrieved_at']}."])
     for cur,r in data['rate_snapshot'].get('rates',{}).items():
         lines.append(f"1 {cur} = {r['base_per_unit']} {base} ([Wise]({r['source_url']})).")

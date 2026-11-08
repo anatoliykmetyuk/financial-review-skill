@@ -18,6 +18,13 @@ Blank cells, formulas returning an empty string, and omitted trailing cells at v
 
 Daily allowance = monthly magnitude / days in that date's month. Sum all requested dates for the period allowance, including future dates in an ongoing period. Never divide a monthly budget by a fixed four weeks. Keep Decimal arithmetic unrounded until display. Being below a full-period ceiling does not establish time-adjusted pace.
 
+## Budget checks
+
+All categories are monthly unless their exact spreadsheet names appear in local `ongoing_categories`. For each month touched by the request, compare its net spending from the first of the month through the earliest of the requested end, the verified cutoff if available, and the review time. Check each month separately when dates cross a month boundary.
+
+- **Monthly** uses the full calendar month's limit.
+- **Ongoing** uses a single cumulative allowance from the first of the month through Sunday of the review week, capped at month-end. Use the week containing the last requested date in that month, or the current week if that date is in the future. Multiply the monthly limit by the included calendar days and divide by the number of days in the month. Spending above the allowance in one week can be offset by spending below it in another week of the same month.
+
 ## Rates
 
 Fetch current Wise rates for every account currency used and the chosen local display currency, converting to the configured base. Historical periods still use current rates unless the user explicitly requests historical rates. The base itself needs no conversion. Never substitute saved historical transaction rates or another provider.
