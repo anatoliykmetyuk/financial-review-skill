@@ -37,7 +37,7 @@ ongoing_categories:
 banks: {}
 ```
 
-The configured period is one of `this_week`, `this_month`, `last_week`, or `last_month`. The warning threshold is in the base currency. Empty alias maps and bank maps are valid; account details live in the accounts table. `ongoing_categories` contains exact spreadsheet category names and defaults to an empty list when omitted. Individual review arguments can override saved timezone/currency choices.
+The configured period is one of `this_week`, `this_month`, `last_week`, or `last_month`. The warning threshold is in the base currency. Empty alias maps and bank maps are valid. Tracked balances live in the accounts table. Optional [Sony Bank sign-in identifiers](banks/sony-bank.md#optional-sign-in-prefill) live in the `banks` map. `ongoing_categories` contains exact spreadsheet category names and defaults to an empty list when omitted. Individual review arguments can override saved timezone/currency choices.
 
 There is no saved spreadsheet layout. On each review the skill discovers category/month budgets from the current sheet through the connected spreadsheet tools. See [budgets and currency](budgets-and-currency.md).
 

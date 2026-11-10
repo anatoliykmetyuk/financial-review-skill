@@ -48,7 +48,7 @@ You will choose or confirm:
 - The amount of overspending that separates yellow from red warnings.
 - Any category shortcuts and categories you want to track with an ongoing allowance.
 
-You need access to the spreadsheet through the connected Google Drive integration and access to your bank history. Codex imports Wise CSV statements and reads Sony Bank savings history directly in the browser. Bank access uses Chrome by default. If login is needed, Codex asks you to log in yourself.
+You need access to the spreadsheet through the connected Google Drive integration and access to your bank history. Codex imports Wise CSV statements and reads Sony Bank savings history directly in the browser. Bank access uses Chrome by default. For Sony Bank, you can save your branch and account numbers in the Git-ignored `data/settings.yaml` so Codex can fill them in for you. You finish signing in yourself.
 
 ## Ask for a review
 

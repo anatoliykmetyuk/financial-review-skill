@@ -47,5 +47,5 @@ Every classification request must reuse [scripts/classification-table.html](scri
 - There are only `accounts` and `transactions` tables. Do not store evidence, import history, coverage records, fingerprints, or raw source rows. User corrections update account/transaction data directly.
 - Source timezones are account parsing configuration; transactions have one UTC timestamp. Ask about missing source timezones or conflicting duplicates rather than inventing values.
 - A report cutoff describes the current output only and is not persisted. Do not infer full coverage from an empty date. A blank cell at a verified category/month intersection is a zero budget; missing or ambiguous rows/months are errors.
-- Ask the user to log into the configured browser when necessary. Never retrieve credentials.
+- Follow the bank reference for any sign-in prefill and ask the user to finish signing in. Never retrieve authentication secrets.
 - Use the scripts' daily-backup implementation and retention policy documented once in [data and CLI](references/data-and-cli.md). Perform calculations through scripts rather than ad hoc arithmetic.
