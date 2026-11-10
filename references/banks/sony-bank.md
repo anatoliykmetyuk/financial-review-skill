@@ -4,9 +4,11 @@ Use the common Fetch workflow and the configured browser through computer use. S
 
 ## Optional sign-in prefill
 
-When the user requests prefill, save their confirmed branch number and account number under `banks.sony-bank` in Git-ignored `data/settings.yaml`. Use `branch_number` (3 digits) and `account_number` (7 digits) as quoted strings to preserve leading zeros. The pair belongs to the login profile and is shared by its tracked currencies. Keep the values out of reports and tracked files.
+To enable prefill, save the user's confirmed `branch_number` (3 digits) and `account_number` (7 digits) under `banks.sony-bank` in Git-ignored `data/settings.yaml`. Store them as quoted strings to preserve leading zeros. Once saved, the pair applies to every sign-in for that profile, across its tracked currencies. Keep the values out of reports and tracked files.
 
-When Fetch reaches the [official Sony Bank login form](https://sonybank.jp/pages/db/dbca0100/), read the saved pair and fill only **Branch number (店番号)** and **Account number (口座番号)**. Leave matching prefilled values in place. If either saved value is missing or invalid, or the form already shows a conflicting value, hand the form to the user. Let the user enter their password, submit the form, and complete any further verification before resuming Fetch.
+1. Whenever Sony Bank presents a sign-in form during Fetch, apply prefill to the visible form regardless of its URL. Locate the editable **Branch Number (店番号)** and **Account Number (口座番号)** fields by their visible labels and the current browser state.
+2. Read the saved pair before contacting the user. If the saved values are valid and both fields are empty or already match, fill the empty fields and verify that both now match.
+3. Hand off the same tab for the user to finish signing in. If prefill could not complete, tell the user what blocked it and leave any conflicting values for them to resolve. Wait for sign-in to complete before resuming Fetch.
 
 ## Accounts and date range
 
