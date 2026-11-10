@@ -27,7 +27,7 @@ Use a common money scale across positive-budget bars. Partial bars are shorter: 
 
 If the period is overspent, cap every visible bar at capacity and show the actual period percent and excess explicitly. Zero budget means undefined percent, shown as “N/A (zero budget)”; keep daily reference sections and explicitly label positive spending as over budget. These bars share one fill; they are never independent daily or weekly expense charts.
 
-Line nodes expose chronological transaction details. Header: local day/date and total local currency. Exactly one transaction per line: `HH:mm · formatted amount · description`, adapting currency. Preserve visual line breaks and show refunds with their signed spending value. Missing source time must say “time unavailable”, never invented midnight. The importer deliberately blocks date-only data until a bank-specific policy is resolved.
+Line nodes show the day and total in the local currency. Show one transaction per line with time, formatted amount, and description. For Sony Bank rows, use the bank posting date and leave the time column blank. Preserve visual line breaks and show refunds with their signed spending value.
 
 Keep zero as the lower Y-axis bound when every daily total is nonnegative. Extend below zero only for actual negative daily totals, such as net refunds; chart padding must not introduce negative spending labels by itself.
 

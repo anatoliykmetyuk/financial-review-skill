@@ -8,6 +8,28 @@ script=str(runtime/'scripts/finance.py')
 
 
 class CliTest(unittest.TestCase):
+    def test_sony_ingest_reads_browser_payload_from_stdin(self):
+        with tempfile.TemporaryDirectory() as d:
+            data = Path(d)
+            args = [python,script,'--data-dir',str(data)]
+
+            def run(*command, payload=None):
+                result = subprocess.run(args + list(command),input=payload,capture_output=True,text=True)
+                self.assertEqual(result.returncode,0,result.stderr)
+                return json.loads(result.stdout)
+
+            run('configure',str(write_settings(data)))
+            account = run('account','--bank','sony-bank','--source-id','fixture','--name','Fixture savings',
+                          '--currency','CAD','--source-timezone','Asia/Singapore')['account']
+            day = '2032-04-03'
+            row = {'date':day,'currency':'CAD','description':'円普通預金へ振替','amount':'-42.13','balance_after':'51.68'}
+            payload = json.dumps({'currency':'CAD','start':day,'end':day,'result_count':1,'rows':[row]})
+            command = ('ingest','-','--adapter','sony-bank','--account',account)
+            self.assertEqual(run(*command,payload=payload)['added'],1)
+            self.assertEqual(run(*command,payload=payload)['added'],0)
+            saved, = run('query','--start',day,'--end',day)
+            self.assertEqual((saved['kind'],saved['local_date'],saved['local_time']),('internal',day,None))
+
     def test_full_workflow_for_both_modes(self):
         with tempfile.TemporaryDirectory() as d:
          root=Path(d)

@@ -127,7 +127,8 @@
         const heading=document.createElement('div');heading.textContent=header;
         const transactions=document.createElement('div');transactions.className='detail-transactions';
         d.transactions.forEach(t=>{
-          for(const [name,value] of [['time',t.local_time || 'time unavailable'],['amount',money(t.spent_local)],['description',t.description]]){
+          const time=t.posting_date ? '' : (t.local_time || 'time unavailable');
+          for(const [name,value] of [['time',time],['amount',money(t.spent_local)],['description',t.description]]){
             const cell=document.createElement('span');cell.className=`detail-${name}`;cell.textContent=value;transactions.append(cell);
           }
         });

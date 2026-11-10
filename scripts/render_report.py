@@ -103,7 +103,9 @@ def render(data,chart_path=None):
         lines.extend(['',f'visualize{{"path":"{path}"}}'])
     if 'latest_transaction' in data and not data['coverage']['usable_for_review']:
         latest = data['latest_transaction']
-        recorded = datetime.fromisoformat(latest).isoformat(sep=' ', timespec='minutes') if latest else 'unavailable'
+        recorded = latest or 'unavailable'
+        if latest and 'T' in latest:
+            recorded = datetime.fromisoformat(latest).isoformat(sep=' ', timespec='minutes')
         lines.extend(['', f"Ledger only. Latest recorded transaction · {recorded}. Coverage is unverified."])
     elif 'latest_transaction' in data or not data['coverage']['complete']:
         observed=[d for d in data['coverage']['days'] if d['cutoff']]

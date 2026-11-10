@@ -42,6 +42,12 @@ class RenderTest(unittest.TestCase):
     def test_nonready_report_cannot_render(self):
         with self.assertRaises(ReviewError): render({'status':'needs-classification'})
 
+    def test_ledger_only_latest_posting_preserves_date_precision(self):
+        data = fixture()
+        data.update(mode='general',categories=[],latest_transaction='2026-11-04')
+        data['coverage']['usable_for_review'] = False
+        self.assertIn('Latest recorded transaction · 2026-11-04. Coverage',render(data))
+
     def test_general_base_warnings_and_all_clear(self):
         data=fixture();data['mode']='general'
         data['categories']=[

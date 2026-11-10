@@ -5,7 +5,7 @@ Use the existing [HTML template](../scripts/classification-table.html) for every
 Populate the template from the fresh unclassified query in the shared workflow. Keep its six headers and chronological order. Each row has six cells:
 
 - **ID:** the database transaction ID.
-- **Date:** reporting-timezone weekday, abbreviated month and day, and 24-hour time on three separate lines, using `<br>` between them. Compute the weekday from the real timestamp and year; never guess it.
+- **Date:** weekday, abbreviated month and day, and 24-hour time on separate lines, using `<br>` between them. Use the reporting timezone for timed rows. For Sony Bank, compute the weekday from the bank posting date and omit the time line.
 - **Description:** an accurate, concise transaction description.
 - **Account:** a recognizable account name, separate from the amount.
 - **Amount:** signed account amount in its account currency. Outflows have a leading minus sign, such as `-€100`; inflows have no minus sign, such as `€100`. Preserve meaningful precision and use a currency code when a symbol would be ambiguous.

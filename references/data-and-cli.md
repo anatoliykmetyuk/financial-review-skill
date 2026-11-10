@@ -48,13 +48,13 @@ On later runs, scripts read this configuration directly. No private choices belo
 There are exactly two tables:
 
 - **accounts**: `id`, `name`, `currency`, `source_timezone`, `tracked`.
-- **transactions**: `id`, `account_id`, `bank_transaction_id`, `timestamp_us`, `description`, `merchant`, `payment_reference`, `details_type`, `amount_minor`, `currency`, `charged_amount_minor`, `charged_currency`, `kind`, `category`, `classification_origin`.
+- **transactions**: `id`, `account_id`, `bank_transaction_id`, `timestamp_us`, optional `posting_date` and `balance_after_minor` for Sony Bank, `description`, `merchant`, `payment_reference`, `details_type`, `amount_minor`, `currency`, `charged_amount_minor`, `charged_currency`, `kind`, `category`, `classification_origin`.
 
 Account IDs are namespaced strings such as `example-bank:account-a`. There is no separate institution table. `timestamp_us INTEGER` is the sole transaction timestamp, storing UTC Unix microseconds. SQLite has no native date/time type. Tables use ordinary typing, not STRICT mode.
 
 Money uses integer minor units and currency codes, without floating-point storage. Decimal input is scaled exactly; fractional minor units or 64-bit overflow cause an error, never rounding. Report JSON converts amounts to major-unit decimal strings. IDs, currency codes, descriptions, and category labels are strings; flags and timestamps are integers. Manual classification origin preserves explicit decisions across rule changes.
 
-There are no stored import records, evidence, raw source rows, fingerprints, coverage registries, legacy queues, or metadata tables. Imports compare account/ID/timestamp and transaction values. Repeated CSVs add no duplicates or overwrite manual assignments. Conflicting duplicates require a user decision.
+There are no stored import records, evidence, raw source rows, fingerprints, coverage registries, legacy queues, or metadata tables. Wise and normalized CSV imports compare account, ID, timestamp, and transaction values. Sony Bank uses its [posting date and running balance](banks/sony-bank.md#import-the-browser-rows). Repeated imports preserve manual assignments. Conflicting duplicates require a user decision.
 
 Schema version is in `PRAGMA user_version`. Supported older schemas upgrade directly in the same file, preserving actual transactions/classifications and using the daily backup policy below. An unrepresentable amount rolls the transaction back.
 
@@ -81,7 +81,7 @@ The following are abstract examples; values must come from the completed local s
 
 ## Bank adapters
 
-Register accounts with their actual currency and source timezone. The Wise reference describes its adapter. Other banks need their own procedure and adapter, or a transformation to normalized CSV with required columns:
+Register accounts with their actual currency and source timezone. See the [Wise](banks/wise.md) and [Sony Bank](banks/sony-bank.md) references for each adapter. The normalized CSV adapter accepts other sources with these required columns:
 
 ```text
 timestamp,amount,currency,description,kind

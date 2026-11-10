@@ -14,6 +14,7 @@ import tempfile
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal, InvalidOperation, getcontext
 from pathlib import Path
+from unicodedata import normalize as unicode_normalize
 from zoneinfo import ZoneInfo
 
 import yaml
@@ -21,7 +22,7 @@ import yaml
 getcontext().prec = 40
 ROOT = Path(__file__).resolve().parents[1]
 UTC = timezone.utc
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 
 class ReviewError(ValueError):
@@ -113,16 +114,21 @@ CREATE TABLE accounts(
 CREATE TABLE transactions(
  id INTEGER PRIMARY KEY, account_id TEXT NOT NULL REFERENCES accounts(id),
  bank_transaction_id TEXT NOT NULL, timestamp_us INTEGER NOT NULL,
+ posting_date TEXT, balance_after_minor INTEGER,
  description TEXT NOT NULL, merchant TEXT NOT NULL, payment_reference TEXT NOT NULL,
  details_type TEXT NOT NULL, amount_minor INTEGER NOT NULL,
  currency TEXT NOT NULL CHECK(currency GLOB '[A-Z][A-Z][A-Z]'),
  charged_amount_minor INTEGER, charged_currency TEXT CHECK(charged_currency GLOB '[A-Z][A-Z][A-Z]'),
  kind TEXT NOT NULL CHECK(kind IN ('expense','refund','income','internal','credit-review')),
  category TEXT, classification_origin TEXT CHECK(classification_origin IN ('rule','manual')),
- UNIQUE(account_id,bank_transaction_id,timestamp_us),
+ CHECK((posting_date IS NULL) = (balance_after_minor IS NULL)),
  CHECK((category IS NULL) = (classification_origin IS NULL)),
  CHECK((charged_amount_minor IS NULL) = (charged_currency IS NULL)));
 CREATE INDEX transaction_period ON transactions(timestamp_us);
+CREATE UNIQUE INDEX transaction_source ON transactions(account_id,bank_transaction_id,timestamp_us)
+ WHERE posting_date IS NULL;
+CREATE UNIQUE INDEX transaction_posting ON transactions(account_id,posting_date,bank_transaction_id,amount_minor,balance_after_minor)
+ WHERE posting_date IS NOT NULL;
 """
 
 
@@ -157,10 +163,10 @@ class Ledger:
         self.db.row_factory = sqlite3.Row
         self.db.execute("PRAGMA foreign_keys=ON")
         version = self.db.execute("PRAGMA user_version").fetchone()[0]
-        if version not in (0, 1, 2, 3, SCHEMA_VERSION):
+        if version not in (0, 1, 2, 3, 4, SCHEMA_VERSION):
             raise ReviewError(f"Unsupported database version: {version}; explicit migration required")
         self.prune_backups()
-        if version in (1, 2, 3):
+        if 0 < version < SCHEMA_VERSION:
             try:
                 self.migrate_schema()
             except Exception:
@@ -170,11 +176,16 @@ class Ledger:
             self.db.executescript("BEGIN;\n" + SCHEMA + f"PRAGMA user_version={SCHEMA_VERSION};\nCOMMIT;")
 
     def migrate_schema(self):
-        self.before_write()
+        if self.db.execute("SELECT 1 FROM accounts LIMIT 1").fetchone():
+            self.before_write()
         self.db.execute("PRAGMA foreign_keys=OFF")
         self.db.execute("PRAGMA secure_delete=ON")
         try:
-            self.db.execute("BEGIN")
+            self.db.execute("BEGIN IMMEDIATE")
+            version = self.db.execute("PRAGMA user_version").fetchone()[0]
+            if version == SCHEMA_VERSION:
+                self.db.commit()
+                return
             self.db.execute("ALTER TABLE accounts RENAME TO old_accounts")
             self.db.execute("ALTER TABLE transactions RENAME TO old_transactions")
             for index in ("transaction_period","transaction_source"):
@@ -183,12 +194,14 @@ class Ledger:
                 if statement.strip():
                     self.db.execute(statement)
             self.db.execute("INSERT INTO accounts SELECT id,name,currency,source_timezone,tracked FROM old_accounts")
-            columns = [row[1] for row in self.db.execute("PRAGMA table_info(transactions)")]
+            columns = [row[1] for row in self.db.execute("PRAGMA table_info(transactions)")
+                       if row[1] not in {"posting_date", "balance_after_minor"}]
             names = ",".join(columns)
             for old in self.db.execute("SELECT * FROM old_transactions").fetchall():
                 values = dict(old)
-                values['amount_minor'] = to_minor(values['amount'],values['currency'])
-                values['charged_amount_minor'] = to_minor(values['charged_amount'],values['charged_currency']) if values['charged_amount'] is not None else None
+                if version < 4:
+                    values['amount_minor'] = to_minor(values['amount'],values['currency'])
+                    values['charged_amount_minor'] = to_minor(values['charged_amount'],values['charged_currency']) if values['charged_amount'] is not None else None
                 self.db.execute(f"INSERT INTO transactions({names}) VALUES ({','.join('?' for _ in columns)})",[values[k] for k in columns])
             for table in ("import_transactions","imports","institutions","legacy_corrections","metadata","old_transactions","old_accounts"):
                 self.db.execute(f"DROP TABLE IF EXISTS {table}")
@@ -313,6 +326,9 @@ class Ledger:
         account = self.db.execute("SELECT * FROM accounts WHERE id=?", (account_id,)).fetchone()
         if not account:
             raise ReviewError("Unknown account; configure it first")
+        if adapter == "sony-bank":
+            payload = json.load(sys.stdin, parse_float=Decimal) if Path(path) == Path('-') else read_json(path)
+            return self.ingest_sony(sony_postings(payload, account), account_id)
         content = Path(path).read_text(encoding="utf-8-sig")
         reader = csv.DictReader(content.splitlines(keepends=True),strict=True)
         required = {"TransferWise ID","Date Time","Amount","Currency","Description","Transaction Details Type"} if adapter == "wise" else {"timestamp","amount","currency","description","kind"} if adapter == "normalized" else None
@@ -332,7 +348,7 @@ class Ledger:
                 if key in seen:
                     raise ReviewError("Indistinguishable rows within one file; ask about duplicate/collision")
                 seen.add(key)
-                matches = self.db.execute("""SELECT * FROM transactions WHERE account_id=? AND timestamp_us=?
+                matches = self.db.execute("""SELECT * FROM transactions WHERE account_id=? AND timestamp_us=? AND posting_date IS NULL
                     AND (bank_transaction_id=? OR bank_transaction_id='' OR ?='')""",
                     (account_id,row['timestamp_us'],row['bank_transaction_id'],row['bank_transaction_id'])).fetchall()
                 def equal(old):
@@ -341,28 +357,61 @@ class Ledger:
                     if len(matches)==1 and equal(matches[0]):
                         continue
                     raise ReviewError(f"Conflicting duplicate/ambiguous timestamp: existing IDs {[m['id'] for m in matches]}")
-                keys=list(row)
-                self.before_write()
-                self.db.execute(f"INSERT INTO transactions(account_id,{','.join(keys)}) VALUES (?,{','.join('?' for _ in keys)})",
-                                [account_id]+[row[k] for k in keys])
+                self.insert_transaction(account_id, row)
                 added+=1
         return {"added":added,"rows":len(rows)}
 
+    def insert_transaction(self, account_id, row):
+        self.before_write()
+        self.db.execute(f"INSERT INTO transactions(account_id,{','.join(row)}) VALUES (?,{','.join('?' for _ in row)})",
+                        [account_id, *row.values()])
+
+    def ingest_sony(self, rows, account_id):
+        added, refreshed = 0, 0
+        if not rows:
+            return {"added":0,"rows":0,"refreshed":0}
+        self.before_write()
+        with self.db:
+            self.db.execute("BEGIN IMMEDIATE")
+            for key, row in rows.items():
+                matches = self.db.execute("""SELECT * FROM transactions WHERE account_id=? AND posting_date=?
+                    AND amount_minor=? AND balance_after_minor=?
+                    AND (bank_transaction_id=? OR bank_transaction_id='' OR ?='')""",
+                    (account_id, *key, row["bank_transaction_id"])).fetchall()
+                if len(matches) > 1 or (matches and matches[0]["bank_transaction_id"] != row["bank_transaction_id"]):
+                    raise ReviewError("Ambiguous Sony Bank posting reference")
+                old = matches[0] if matches else None
+                if old is None:
+                    self.insert_transaction(account_id, row)
+                    added += 1
+                elif any(old[field] != row[field] for field in ("description", "merchant")):
+                    if not row["bank_transaction_id"]:
+                        raise ReviewError(f"Ambiguous Sony Bank posting: existing transaction {old['id']}")
+                    self.db.execute("UPDATE transactions SET description=?,merchant=? WHERE id=?",
+                                    (row["description"], row["merchant"], old["id"]))
+                    refreshed += 1
+        return {"added":added,"rows":len(rows),"refreshed":refreshed}
+
     def select(self, start, end, zone=None):
         zone=zone or self.settings()['defaults']['timezone']
-        _, _, a, b = period(start,end,zone)
+        first, last, a, b = period(start,end,zone)
+        report_zone = ZoneInfo(zone)
         rows = self.db.execute("""SELECT t.*,a.name AS account_name FROM transactions t
-            JOIN accounts a ON a.id=t.account_id WHERE timestamp_us>=? AND timestamp_us<?
-            ORDER BY timestamp_us,t.id""", (a,b)).fetchall()
+            JOIN accounts a ON a.id=t.account_id
+            WHERE (posting_date IS NULL AND timestamp_us>=? AND timestamp_us<?) OR posting_date BETWEEN ? AND ?
+            ORDER BY timestamp_us,t.id""", (a,b,first.isoformat(),last.isoformat())).fetchall()
         result = []
         for row in rows:
             r = dict(row)
             r['amount'] = str(from_minor(r['amount_minor'],r['currency']))
             r['charged_amount'] = str(from_minor(r['charged_amount_minor'],r['charged_currency'])) if r['charged_amount_minor'] is not None else None
-            dt = from_us(r["timestamp_us"]).astimezone(ZoneInfo(zone))
-            r.update(local_date=dt.date().isoformat(),local_time=dt.strftime("%H:%M"),local_datetime=dt.isoformat(),
+            dt = from_us(r["timestamp_us"]).astimezone(report_zone)
+            posting_date = r['posting_date']
+            r.update(local_date=posting_date or dt.date().isoformat(),local_time=None if posting_date else dt.strftime("%H:%M"),
+                     local_datetime=posting_date or dt.isoformat(),
                      timestamp_unix=str(Decimal(r["timestamp_us"])/1000000))
             result.append(r)
+        result.sort(key=lambda row: row['local_date'])
         return result
 
     def classify(self, start, end, zone=None):
@@ -490,6 +539,53 @@ def normalize(row, adapter, account):
     return values
 
 
+def sony_postings(payload, account):
+    if not account["id"].startswith("sony-bank:"):
+        raise ReviewError("The Sony Bank adapter requires a Sony Bank account")
+    if not isinstance(payload, dict) or payload.get("currency") != account["currency"]:
+        raise ReviewError("Sony Bank result currency does not match the account")
+    rows = payload.get("rows")
+    count = payload.get("result_count")
+    if not isinstance(rows, list) or type(count) is not int or count != len(rows):
+        raise ReviewError("Sony Bank row count does not match the displayed result count")
+    if any(not isinstance(payload.get(field), str) for field in ("start", "end")):
+        raise ReviewError("Sony Bank results require start and end dates")
+    first, last = date.fromisoformat(payload["start"]), date.fromisoformat(payload["end"])
+    if first > last:
+        raise ReviewError("Sony Bank result start must not follow end")
+    prepared = {}
+    fields = ("date", "currency", "description", "amount", "balance_after")
+    for raw in rows:
+        if not isinstance(raw, dict) or any(not isinstance(raw.get(field), str) for field in fields):
+            raise ReviewError("Sony Bank rows require date, currency, description, amount, and balance_after strings")
+        day = date.fromisoformat(raw["date"])
+        if not first <= day <= last:
+            raise ReviewError("Sony Bank posting date is outside the displayed range")
+        if any(not re.fullmatch(r"-?[0-9]+(?:\.[0-9]+)?", raw[field]) for field in ("amount", "balance_after")):
+            raise ReviewError("Sony Bank amounts and balances must be plain signed decimal strings")
+        description = " ".join(unicode_normalize("NFKC", raw["description"]).split())
+        card = re.fullmatch(r"Visa\s*(?:デビット|Debit)(?:\s+(\d{2}\s+\d{6}))?(?:\s+(.+))?", description, re.IGNORECASE)
+        transfer = re.fullmatch(r"(?:円|外貨)普通預金(?:\([^()]+\))?(?:へ|より|から)振替", description)
+        reference = card[1] if card and card[1] else ""
+        amount = number(raw["amount"])
+        kind = "expense" if amount < 0 else "credit-review"
+        details_type = ""
+        if transfer:
+            kind, details_type = "internal", "SONY BANK SAVINGS TRANSFER"
+        elif card:
+            kind, details_type = ("refund" if amount > 0 else kind), "CARD"
+        row = normalize({
+            "timestamp": f"{day.isoformat()}T00:00:00", "amount": amount, "currency": raw["currency"],
+            "description": description, "merchant": card[2] if card and card[2] else "",
+            "bank_transaction_id": reference, "payment_reference": reference, "kind": kind,
+            "details_type": details_type,
+        }, "normalized", account)
+        row.update(posting_date=day.isoformat(), balance_after_minor=to_minor(raw["balance_after"], row["currency"]))
+        key = (row["posting_date"], row["amount_minor"], row["balance_after_minor"], reference)
+        if key in prepared:
+            raise ReviewError("Indistinguishable Sony Bank rows in the displayed results")
+        prepared[key] = row
+    return prepared
 
 
 def rate_table(snapshot, needed, base):
@@ -556,8 +652,10 @@ def report(ledger, start, end, zone, budget, fx, category=None, local_currency=N
     review_time = parse_instant(as_of) if as_of else datetime.now(UTC)
     current_local = review_time.astimezone(ZoneInfo(zone)).date()
     data_end = min(parse_instant(cutoff), review_time) if cutoff else review_time
+    cutoff_day = data_end.astimezone(ZoneInfo(zone)).date().isoformat()
+    cutoff_us = epoch_us(data_end)
     rows = [r for r in ledger.select(a.replace(day=1).isoformat(),end,zone)
-            if r["timestamp_us"] <= epoch_us(data_end)]
+            if (r["posting_date"] <= cutoff_day if r["posting_date"] else r["timestamp_us"] <= cutoff_us)]
     unknown = [r for r in rows if r["category"] is None]
     ambiguous_credit = [r for r in rows if r["kind"]=="credit-review"]
     if unknown or ambiguous_credit:
@@ -715,7 +813,7 @@ def build_parser():
     ing = subs.add_parser("ingest")
     ing.add_argument("path",type=Path)
     ing.add_argument("--account",required=True)
-    ing.add_argument("--adapter",choices=["wise","normalized"],required=True)
+    ing.add_argument("--adapter",choices=["wise","normalized","sony-bank"],required=True)
     for name in ("classify","query","rule","report"):
         sub = subs.add_parser(name)
         sub.add_argument("--start",required=True)

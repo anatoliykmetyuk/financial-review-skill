@@ -48,7 +48,7 @@ You will choose or confirm:
 - The amount of overspending that separates yellow from red warnings.
 - Any category shortcuts and categories you want to track with an ongoing allowance.
 
-You need access to the spreadsheet through the connected Google Drive integration and access to your bank statements. Wise acquisition and CSV import are supported; another bank requires a compatible adapter before its exports can be imported. Bank access uses Chrome by default. If login is needed, Codex asks you to log in yourself.
+You need access to the spreadsheet through the connected Google Drive integration and access to your bank history. Codex imports Wise CSV statements and reads Sony Bank savings history directly in the browser. Bank access uses Chrome by default. If login is needed, Codex asks you to log in yourself.
 
 ## Ask for a review
 
@@ -78,11 +78,11 @@ The daily chart starts its vertical scale at zero unless a day has negative net 
 
 ## What happens during a review
 
-Codex reuses suitable downloaded bank export files, including today's partial export, without repeating downloads or completed imports for every operation. For an ongoing day, existing ledger rows do not prove that all of that day's transactions have been imported. Codex uses suitable downloaded bank files or downloads and imports them when unavailable. Already complete historical ledger data can be reused directly. You can explicitly request a refresh or no ingestion, such as “use the ledger only”. Reports disclose the data cutoff and any limitations. Imports avoid duplicates, and Codex reads your current spreadsheet and applies classification rules.
+Codex reuses suitable Wise exports and already complete historical ledger data. For missing Sony Bank dates, it reads the browser history for each tracked currency. When a review includes today, Codex obtains the available bank data and reports the cutoff. Sony Bank transactions show their posting date. You can request a refresh or say “use the ledger only”. Imports avoid duplicates, and Codex reads your current spreadsheet and applies classification rules.
 
 Only transactions still unclassified after automatic rules require category confirmation. Existing database classifications and rule matches are used directly, without asking you to approve them again. If none remain unclassified, Codex proceeds to the report.
 
-For unresolved transactions, the skill reuses a compact table displayed inline, with separate columns for ID, Date, Description, Account, Amount, and Proposed Category. Short columns fit their contents; descriptions and proposed categories wrap instead of pushing the table horizontally. Date values use three lines: weekday, month and day, then time. Amounts use the account currency with a minus sign for outflows (such as -€100) and no minus sign for inflows (€100). The proposed category is bold, followed by a brief explanation in normal text in the same cell. Suggestions are saved only after you confirm them.
+For unresolved transactions, the skill reuses a compact table displayed inline, with separate columns for ID, Date, Description, Account, Amount, and Proposed Category. Short columns fit their contents; descriptions and proposed categories wrap instead of pushing the table horizontally. Dates show the weekday, month and day, and the time when supplied by the bank. Amounts use the account currency with a minus sign for outflows (such as -€100) and no minus sign for inflows (€100). The proposed category is bold, followed by a brief explanation in normal text in the same cell. Suggestions are saved only after you confirm them.
 
 You can respond with either a reusable rule or a one-off decision:
 

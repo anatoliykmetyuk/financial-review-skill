@@ -10,7 +10,7 @@ from decimal import Decimal
 from pathlib import Path
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'scripts'))
-from finance import (Ledger, ReviewError, dump, epoch_us, match,
+from finance import (Ledger, ReviewError, SCHEMA_VERSION, dump, epoch_us, match,
                      normalize, parse_instant, period, report, from_us, to_minor, from_minor)
 import yaml
 from helpers import write_settings, settings
@@ -103,6 +103,53 @@ class LedgerTest(unittest.TestCase):
             self.ingest([self.row()],account='missing')
         with self.assertRaisesRegex(ReviewError,'currency'):
             self.ingest([self.row(cur='KRW')])
+
+    def sony_ingest(self, account, rows, **overrides):
+        payload = {'currency':'USD', 'start':'2026-11-02', 'end':'2026-11-03',
+                   'result_count':len(rows), 'rows':rows, **overrides}
+        path = self.root / 'browser-results.json'
+        path.write_text(json.dumps(payload))
+        return self.l.ingest(path, account, 'sony-bank')
+
+    def test_sony_posting_date_same_day_rows_and_overlaps(self):
+        account = self.l.configure_account('sony-bank','fixture','Fixture savings','USD','Asia/Singapore')
+        first = dict(date='2026-11-02',currency='USD',description='Same memo',amount='-7.25',balance_after='90.75')
+        second = {**first, 'balance_after':'83.50'}
+        card = {**first, 'description':'Ｖｉｓａデビット ２１　１２３４５６　Ｌｏｎｇ　Ｓｈｏｐ', 'balance_after':'76.25'}
+        rows = [first, second, card]
+        self.assertEqual(self.sony_ingest(account, rows)['added'],3)
+        self.assertEqual(self.sony_ingest(account, rows[::-1], end='2026-11-02')['added'],0)
+        self.assertEqual(self.l.select('2026-11-01','2026-11-01','UTC'),[])
+        saved = self.l.select('2026-11-02','2026-11-02','UTC')
+        self.assertEqual({from_us(row['timestamp_us']).isoformat() for row in saved}, {'2026-11-01T16:00:00+00:00'})
+        self.assertTrue(all(row['local_date']=='2026-11-02' and row['local_time'] is None for row in saved))
+        self.assertEqual(saved[-1]['merchant'],'Long Shop')
+        self.assertEqual(match(saved[-1],self.l.rules()['rules']),'Category A')
+        self.l.assign([saved[-1]['id']],'Manual category')
+        card = {**card,'description':'Visaデビット 21 123456 Updated Shop'}
+        self.assertEqual(self.sony_ingest(account, [card])['refreshed'],1)
+        saved = self.l.select('2026-11-02','2026-11-02','UTC')
+        self.assertEqual(len(saved),3)
+        self.assertEqual((saved[-1]['merchant'], saved[-1]['category']),('Updated Shop','Manual category'))
+
+    def test_sony_transfer_and_conflicting_browser_results(self):
+        account = self.l.configure_account('sony-bank','fixture','Fixture savings','USD','UTC')
+        transfer = dict(date='2026-11-02',currency='USD',description='外貨普通預金（豪ドル）より振替',
+                        amount='51.70',balance_after='125.40')
+        self.rules([{'category':'Transfer category','keywords':['SONY BANK SAVINGS TRANSFER']}])
+        for rows, options, error in [([transfer],{'result_count':2},'row count'),
+                                     ([transfer],{'end':'2026-11-02','start':'2026-11-03'},'start'),
+                                     ([transfer,transfer],{},'Indistinguishable')]:
+            with self.assertRaisesRegex(ReviewError,error):
+                self.sony_ingest(account, rows, **options)
+        self.assertEqual(self.sony_ingest(account,[transfer])['added'],1)
+        card = {**transfer,'description':'Visaデビット 21 123456 New Shop','amount':'-1.25','balance_after':'124.15'}
+        conflicting = {**transfer,'description':'Other memo'}
+        with self.assertRaisesRegex(ReviewError,'Ambiguous'):
+            self.sony_ingest(account,[card,conflicting])
+        self.assertEqual(self.classify()['unclassified'],[])
+        row, = self.l.select('2026-11-02','2026-11-02','UTC')
+        self.assertEqual((row['kind'],row['category']),('internal','Transfer category'))
 
     def test_literal_longest_keyword_and_stable_tie(self):
         rules=[{'category':'A','keywords':['long shop','Uber * Eats']},{'category':'B','keywords':['long shop','shop']}]
@@ -244,22 +291,24 @@ class LedgerTest(unittest.TestCase):
         with self.assertRaisesRegex(ReviewError,'category string'):
             self.l.rules()
 
-    def old_schema(self, amount='-10'):
+    def old_schema(self, amount='-10', version=3):
+        amounts = 'amount TEXT,currency TEXT,charged_amount TEXT' if version == 3 else (
+            'amount_minor INTEGER,currency TEXT,charged_amount_minor INTEGER')
         with self.l.db:
             self.l.db.execute('DROP TABLE transactions');self.l.db.execute('DROP TABLE accounts')
             self.l.db.execute("CREATE TABLE accounts(id TEXT PRIMARY KEY,name TEXT,currency TEXT,source_timezone TEXT,tracked INTEGER)")
-            self.l.db.execute("""CREATE TABLE transactions(id INTEGER PRIMARY KEY,account_id TEXT,bank_transaction_id TEXT,
+            self.l.db.execute(f"""CREATE TABLE transactions(id INTEGER PRIMARY KEY,account_id TEXT,bank_transaction_id TEXT,
                 timestamp_us INTEGER,description TEXT,merchant TEXT,payment_reference TEXT,details_type TEXT,
-                amount TEXT,currency TEXT,charged_amount TEXT,charged_currency TEXT,kind TEXT,category TEXT,classification_origin TEXT)""")
+                {amounts},charged_currency TEXT,kind TEXT,category TEXT,classification_origin TEXT)""")
             self.l.db.execute("INSERT INTO accounts VALUES ('wise:1','Account A','USD','UTC',1)")
             self.l.db.execute("""INSERT INTO transactions VALUES (1,'wise:1','x',1793620800000000,
-                'shop','','','',?,'USD','200','KRW','expense','Category A','manual')""",(amount,))
-            self.l.db.execute('PRAGMA user_version=3')
+                'shop','','','',?,'USD',?,'KRW','expense','Category A','manual')""",(amount, '200' if version == 3 else 200))
+            self.l.db.execute(f'PRAGMA user_version={version}')
 
     def test_v3_upgrade_types_money_in_place_and_preserves_classifications(self):
         self.old_schema()
         data=self.l.data;self.l.close();self.l=Ledger(data)
-        self.assertEqual(self.l.db.execute('PRAGMA user_version').fetchone()[0],4)
+        self.assertEqual(self.l.db.execute('PRAGMA user_version').fetchone()[0],SCHEMA_VERSION)
         tables={r[0] for r in self.l.db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         self.assertEqual(tables,{'accounts','transactions'})
         self.assertTrue(all(row['strict']==0 for row in self.l.db.execute('PRAGMA table_list') if row['name'] in tables))
@@ -268,6 +317,15 @@ class LedgerTest(unittest.TestCase):
         self.assertEqual(row['category'],'Category A');self.assertEqual(row['classification_origin'],'manual')
         self.assertEqual(len(list((data/'backups').glob('*.sqlite3'))),1)
         self.assertFalse(self.l.db.execute('PRAGMA foreign_key_check').fetchall())
+
+    def test_v4_upgrade_preserves_minor_amounts_and_clock_times(self):
+        self.old_schema(-2135, version=4)
+        data = self.l.data
+        self.l.close()
+        self.l = Ledger(data)
+        row, = self.l.select('2026-11-02','2026-11-02','UTC')
+        self.assertEqual((row['amount_minor'], row['charged_amount_minor']),(-2135,200))
+        self.assertEqual((row['local_time'], row['posting_date'], row['category']),('12:00',None,'Category A'))
 
     def test_invalid_money_migration_rolls_back_existing_file(self):
         self.old_schema('0.001')
